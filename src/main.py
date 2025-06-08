@@ -65,7 +65,7 @@ def latest_versions(session):
     for a_tag in a_tags:
         link = a_tag['href']
         text_match = re.search(pattern, a_tag.text)
-        if text_match is not None:  
+        if text_match is not None:
             version, status = text_match.groups()
         else:
             version, status = a_tag.text, ''
@@ -83,7 +83,11 @@ def download(session):
     soup = BeautifulSoup(response.text, 'lxml')
     main_tag = find_tag(soup, 'div', attrs={'role': 'main'})
     table_tag = find_tag(main_tag, 'table', attrs={'class': 'docutils'})
-    pdf_a4_tag = find_tag(table_tag, 'a', attrs={'href': re.compile(r'.+pdf-a4\.zip$')})
+    pdf_a4_tag = find_tag(
+        table_tag,
+        'a',
+        attrs={'href': re.compile(r'.+pdf-a4\.zip$')}
+    )
     archive_url = urljoin(downloads_url, pdf_a4_tag['href'])
     downloads_dir = BASE_DIR / 'downloads'
     downloads_dir.mkdir(exist_ok=True)
@@ -95,13 +99,20 @@ def download(session):
         logging.info(f'Архив был загружен и сохранён: {archive_path}')
 
 
-def pep(session):
-    response = get_response(session, PEP_LIST_URL)
-    soup = BeautifulSoup(response.text, 'html.parser')
+def extract_pep_status(html):
+    soup = BeautifulSoup(html, 'html.parser')
+    status_tag = soup.find('dt', string='Status')
+    if status_tag:
+        status_value = status_tag.find_next_sibling('dd')
+        if status_value:
+            return status_value.text.strip()
+    return 'Not Found'
+
+
+def parse_pep_table(soup):
     table = soup.find('table')
     rows = table.find_all('tr')[1:]
-
-    pebs = []
+    peps = []
     for row in rows:
         cols = row.find_all('td')
         if len(cols) < 2:
@@ -110,33 +121,34 @@ def pep(session):
         pep_num = cols[1].text.strip()
         if pep_num == '0':
             continue
-        pebs.append({
+        peps.append({
             'number': pep_num,
             'expected_status_code': code[-1] if code else '',
             'url': urljoin(BASE_URL, f'/pep-{pep_num.zfill(4)}')
         })
+    return peps
 
-    counts = {}
+
+def pep(session):
+    response = get_response(session, PEP_LIST_URL)
+    soup = BeautifulSoup(response.text, 'html.parser')
+    peps = parse_pep_table(soup)
+
+    from collections import defaultdict
+    counts = defaultdict(int)
     mismatches = []
-
-    for pep in tqdm(pebs, desc='Processing PEPs'):
+    for pep in tqdm(peps, desc='Processing PEPs'):
         expected_status_code = pep['expected_status_code']
         expected_statuses = EXPECTED_STATUS.get(
             expected_status_code,
             ('Unknown',)
         )
         pep_response = get_response(session, pep['url'])
-        real_status = None
-        if pep_response is not None:
-            pep_soup = BeautifulSoup(pep_response.text, 'html.parser')
-            status_tag = pep_soup.find('dt', string='Status')
-            if status_tag:
-                status_value = status_tag.find_next_sibling('dd')
-                if status_value:
-                    real_status = status_value.text.strip()
-        if not real_status:
+        if pep_response:
+            real_status = extract_pep_status(pep_response.text)
+        else:
             real_status = 'Not Found'
-        counts[real_status] = counts.get(real_status, 0) + 1
+        counts[real_status] += 1
 
         if real_status not in expected_statuses and real_status != 'Not Found':
             mismatches.append({
@@ -152,8 +164,7 @@ def pep(session):
 
     total = sum(counts.values())
     results = [['Статус', 'Количество']]
-    for status, count in sorted(counts.items()):
-        results.append([status, count])
+    results += [[status, count] for status, count in sorted(counts.items())]
     results.append(['Total', total])
     return results
 

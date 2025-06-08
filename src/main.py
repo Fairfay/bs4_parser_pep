@@ -9,10 +9,10 @@ import logging
 import requests_cache
 from bs4 import BeautifulSoup
 from tqdm import tqdm
-from pathlib import Path
 from configs import configure_argument_parser, configure_logging
 from outputs import control_output
 from utils import get_response, find_tag
+
 
 def whats_new(session):
     whats_new_url = urljoin(MAIN_DOC_URL, 'whatsnew/')
@@ -22,7 +22,10 @@ def whats_new(session):
     soup = BeautifulSoup(response.text, features='lxml')
     main_div = find_tag(soup, 'section', attrs={'id': 'what-s-new-in-python'})
     div_with_ul = find_tag(main_div, 'div', attrs={'class': 'toctree-wrapper'})
-    sections_by_python = div_with_ul.find_all('li', attrs={'class': 'toctree-l1'})
+    sections_by_python = div_with_ul.find_all(
+        'li',
+        attrs={'class': 'toctree-l1'}
+    )
     results = [('Ссылка на статью', 'Заголовок', 'Редактор, автор')]
     for section in tqdm(sections_by_python):
         version_a_tag = section.find('a')
@@ -37,14 +40,19 @@ def whats_new(session):
         results.append(
             (version_link, h1.text, dl_text)
         )
-    return results 
+    return results
+
 
 def latest_versions(session):
     response = get_response(session, MAIN_DOC_URL)
     if response is None:
         return
     soup = BeautifulSoup(response.text, 'lxml')
-    sidebar = soup.find_tag(soup, 'div', attrs={'class': 'sphinxsidebarwrapper'})
+    sidebar = soup.find_tag(
+        soup,
+        'div',
+        attrs={'class': 'sphinxsidebarwrapper'}
+    )
     ul_tags = sidebar.find_all('ul')
     for ul in ul_tags:
         if 'All versions' in ul.text:
@@ -59,12 +67,13 @@ def latest_versions(session):
         text_match = re.search(pattern, a_tag.text)
         if text_match is not None:  
             version, status = text_match.groups()
-        else:  
-            version, status = a_tag.text, ''  
+        else:
+            version, status = a_tag.text, ''
         results.append(
             (link, version, status)
         )
     return results
+
 
 def download(session):
     downloads_url = urljoin(MAIN_DOC_URL, 'download.html')
@@ -84,6 +93,7 @@ def download(session):
     with open(archive_path, 'wb') as file:
         file.write(response.content)
         logging.info(f'Архив был загружен и сохранён: {archive_path}')
+
 
 def pep(session):
     response = get_response(session, PEP_LIST_URL)
@@ -111,7 +121,10 @@ def pep(session):
 
     for pep in tqdm(pebs, desc='Processing PEPs'):
         expected_status_code = pep['expected_status_code']
-        expected_statuses = EXPECTED_STATUS.get(expected_status_code, ('Unknown',))
+        expected_statuses = EXPECTED_STATUS.get(
+            expected_status_code,
+            ('Unknown',)
+        )
         pep_response = get_response(session, pep['url'])
         real_status = None
         if pep_response is not None:
@@ -144,6 +157,7 @@ def pep(session):
     results.append(['Total', total])
     return results
 
+
 MODE_TO_FUNCTION = {
     'pep': pep,
     'whats-new': whats_new,
@@ -169,7 +183,8 @@ def main():
 
     if results is not None:
         control_output(results, args)
-    logging.info('Парсер завершил работу.') 
+    logging.info('Парсер завершил работу.')
+
 
 if __name__ == '__main__':
-    main() 
+    main()

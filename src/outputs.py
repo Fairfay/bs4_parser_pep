@@ -5,7 +5,7 @@ import csv
 import logging
 from constants import BASE_DIR, DATETIME_FORMAT
 
-# Контроль вывода результатов парсинга.
+
 def control_output(results, cli_args):
     output = cli_args.output
     if output == 'pretty':
@@ -15,12 +15,12 @@ def control_output(results, cli_args):
     else:
         default_output(results)
 
-# Вывод данных в терминал построчно.
+
 def default_output(results):
     for row in results:
-        print(*row)    
+        print(*row)
 
-# Вывод данных в формате PrettyTable.
+
 def pretty_output(results):
     table = PrettyTable()
     table.field_names = results[0]
@@ -28,7 +28,7 @@ def pretty_output(results):
     table.add_rows(results[1:])
     print(table)
 
-# Создание директории с результатами парсинга. 
+
 def file_output(results, cli_args):
     results_dir = BASE_DIR / 'results'
     results_dir.mkdir(exist_ok=True)
